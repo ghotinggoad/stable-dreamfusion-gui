@@ -1,8 +1,11 @@
+import gc
+import torch
+import os
+import json
+
 import sys
 import argparse
-import json
 import numpy as np
-import torch
 import gradio as gr
 import zipfile
 
@@ -18,7 +21,85 @@ from contextlib import nullcontext
 from einops import rearrange
 from omegaconf import OmegaConf
 
-# functions used by backup
+# functions used to interact with system
+
+def clear_memory():
+    # called after deleting the items in python
+    gc.collect()
+    torch.cuda.empty_cache()
+
+def delete_folder(path):
+    try:
+        for root, dirs, files in os.walk(path, topdown=False):
+            for file in files:
+                file_path = os.path.join(root, file)
+                os.remove(file_path)
+            for dir in dirs:
+                dir_path = os.path.join(root, dir)
+                os.rmdir(dir_path)
+        return 1
+    except:
+        return 0
+
+def load_json(path):
+    try:
+        with open(path, "r") as file:
+            data = json.load(file)
+        return data, 1
+    except:
+        return None, 0
+
+def save_json(path, data):
+    try:
+        with open(path, "w") as file:
+            json.dump(data, file)
+        return 1
+    except:
+        return 0
+
+# functions used to update gradio components (updating values or setting visibility)
+
+def change_tab(tab):
+    tabs = ["rod's workflow"]
+    return gr.Tabs.update(selected=tab)
+
+def update_workspaces_list():
+    workspaces = os.listdir("workspaces/")
+    return gr.Dropdown.update(choices=workspaces)
+
+def update_max_epoch_fetch(workspace):
+    try:
+        items = os.listdir("workspaces/"+workspace+"/results")
+        for item in items:
+            index = str(item).find("df_ep")+5
+            if index > 0:
+                return gr.Number.update(value=int(str(item)[index:index+4]))
+    except:
+        pass        
+
+def update_iters_fetch(workspace):
+    try:
+        with open("workspaces/"+workspace+"/log_df.txt", "r") as file:
+            text = file.read()
+            start = text.find(", iters=")+8
+            end = text.find(", lr=")
+        return gr.Number.update(value=int(text[start:end])*2)
+    except:
+        print("Invalid log_df file")
+
+def update_max_epoch_calculate(iters, dataset_size_train, batch_size):
+    return gr.Number.update(value=int(np.ceil(iters / dataset_size_train*batch_size)))
+
+def update_image_slider(max_epoch, workspace, slider, dmtet):
+    if dmtet:
+        workspace = str(workspace)+"_dmtet"
+    # updates the image based on the slider value, usually to select the "angle" (index of the image)
+    image = cv2.imread("temp/"+workspace+"/df_ep{:04d}_{:02d}_rgb.png".format(max_epoch, slider))
+    image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGB)
+    return gr.Image.update(value=image)
+
+
+# functions used by stable_dreamfusion
 
 def preprocess(image, recenter=True, size=256, border_ratio=0.2):
     # this checks to if original image is RGBA or RGB then convert it into CV2 format
@@ -111,42 +192,6 @@ def sample_model(input_im, model, sampler, precision, h, w, ddim_steps, n_sample
             x_samples_ddim = model.decode_first_stage(samples_ddim)
             return torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0).cpu()
 
-# functions used by events
-
-def update_workspaces_list():
-    workspaces = os.listdir("workspaces/")
-    return gr.Dropdown.update(choices=workspaces)
-
-def update_max_epoch_fetch(workspace):
-    try:
-        items = os.listdir("workspaces/"+workspace+"/results")
-        for item in items:
-            index = str(item).find("df_ep")+5
-            if index > 0:
-                return gr.Number.update(value=int(str(item)[index:index+4]))
-    except:
-        pass        
-
-def update_iters_fetch(workspace):
-    try:
-        with open("workspaces/"+workspace+"/log_df.txt", "r") as file:
-            text = file.read()
-            start = text.find(", iters=")+8
-            end = text.find(", lr=")
-        return gr.Number.update(value=int(text[start:end])*2)
-    except:
-        print("Invalid log_df file")
-
-def update_max_epoch_calculate(iters, dataset_size_train, batch_size):
-    return gr.Number.update(value=int(np.ceil(iters / dataset_size_train*batch_size)))
-
-def update_image_slider(max_epoch, workspace, slider, dmtet):
-    if dmtet:
-        workspace = str(workspace)+"_dmtet"
-    # updates the image based on the slider value, usually to select the "angle" (index of the image)
-    image = cv2.imread("temp/"+workspace+"/df_ep{:04d}_{:02d}_rgb.png".format(max_epoch, slider))
-    image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGB)
-    return gr.Image.update(value=image)
 
 # functions used by gradio ui buttons
 
@@ -160,7 +205,9 @@ def generate_novel_view(image, polar, azimuth, radius):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = zero123_utils.load_model_from_config(
         OmegaConf.load("pretrained/zero123/sd-objaverse-finetune-c_concat-256.yaml"),
-        "pretrained/zero123/zero123-xl.ckpt",
+        # "pretrained/zero123/105000.ckpt",
+        "pretrained/zero123/165000.ckpt",
+        # "pretrained/zero123/zero123-xl.ckpt",
         device)
     model.use_ema = False
     
