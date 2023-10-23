@@ -24,11 +24,11 @@ def main():
     # global variables used to parse variables between functions that are not users' direct input
     global settings
     global current_tab
-    global project_name
+    global workspace_name
     global single_image
     global max_epoch
 
-    with gr.Blocks(title="zero123d reconstruction") as app:
+    with gr.Blocks(title="stable-diffusion-gui") as app:
         # make temp directory
         os.makedirs("temp", exist_ok=True)
         os.makedirs("workspaces", exist_ok=True)
@@ -38,28 +38,37 @@ def main():
         current_tab = 3
         if settings["info_tab_on_launch"]:
             current_tab = 0
-        project_name = ""
+        workspace_name = "temp"
         single_image = False
         max_epoch = 0
 
         with gr.Tabs(selected=current_tab) as tabs:
-            with gr.Tab(label="new project", id=3) as new_project_tab:
+            with gr.Tab(label="new workspace", id=3) as new_workspace_tab:
                 # components
-                project_name_input = gr.Textbox(label="project name (no special characters including spaces, only underscores)")
+                gr.Markdown(
+                    """
+                    ### enter a workspace name, upload an image and click on preprocess image to start. if no name is entered, the workspace will take the default name "test".
+                    """)
+                workspace_name_input = gr.Textbox(label="workspace name (no special characters including spaces, only underscores)")
                 with gr.Row():
                     image_input = gr.Image(height=512, width=512, label="image")
-                preprocess_image_button = gr.Button(value="preprocess image", variant="primary")
+                remove_background_button = gr.Button(value="remove background", variant="primary")
                 with gr.Row():
                     previous_tab_button = gr.Button(value="previous", variant="secondary")
                     next_tab_button = gr.Button(value="next", variant="primary")
                 # events
-                new_project_tab.select(fn=lambda: globals().update(current_tab=3))
-                preprocess_image_button.click(fn=lambda: print(end="")).success(fn=preprocess_image_button_handler, inputs=[project_name_input, image_input], outputs=image_input)
+                new_workspace_tab.select(fn=lambda: globals().update(current_tab=3))
+                remove_background_button.click(fn=lambda: print(end="")).success(fn=remove_background_button_handler, inputs=[workspace_name_input, image_input], outputs=image_input)
                 previous_tab_button.click(fn=previous_tab_button_handler, outputs=tabs)
                 next_tab_button.click(fn=next_tab_button_handler, outputs=tabs)
                 
             with gr.Tab(label="six-view generation", id=4) as six_view_generation_tab:
                 # components
+                gr.Markdown(
+                    """
+                    ### click on the "generate" button to begin generating the novel images from the different viewpoints.
+                    ### use the slider to cycle through the generated images where 0=front, 1=right, 2=back, 3=left, 4=top, 5=bottom.
+                    """)
                 with gr.Row():
                     image_input = gr.Image(height=512, width=512, interactive=False)
                     images_viewer_output = gr.Image(label="image")
@@ -71,18 +80,25 @@ def main():
                     next_tab_button = gr.Button(value="next", variant="primary")
                 # events
                 six_view_generation_tab.select(fn=lambda: globals().update(current_tab=4)).success(fn=return_input_image_handler, outputs=image_input)
-                generate_button.click(fn=lambda: print(end="")).success(fn=six_view_generation_handler, inputs=single_image_input, outputs=[images_viewer_output, images_viewer_slider_input])
+                single_image_input.select(fn=single_image_checkbox_handler, inputs=single_image_input, outputs=images_viewer_output)
+                generate_button.click(fn=lambda: print(end="")).success(fn=six_view_generation_handler, outputs=[images_viewer_output, images_viewer_slider_input])
                 images_viewer_slider_input.change(fn=images_viewer_slider_handler, inputs=images_viewer_slider_input, outputs=images_viewer_output)
                 previous_tab_button.click(fn=previous_tab_button_handler, outputs=tabs)
                 next_tab_button.click(fn=next_tab_button_handler, outputs=tabs)
             
-            with gr.Tab(label="model reconstruction", id=5) as model_reconstruction_tab:
+            with gr.Tab(label="model generation", id=5) as model_generation_tab:
                 # components
+                gr.Markdown(
+                    """
+                    ### after you have finished inputting the desired parameters, click on the "generate" button to begin generating the novel images from the different viewpoints.
+                    ### the model will be shown on the right image window and the mesh fill be available to download right above the "generate" button.
+                    """)
                 with gr.Row():
                     image_input = gr.Image(height=512, width=512, interactive=False)
                     images_viewer_output = gr.Image(label="image")
                 images_viewer_slider_input = gr.Slider(minimum=0, maximum=0, label="slide to view generated model from different angles", step=1, interactive=False)
                 with gr.Row():
+                    random_seed_input = gr.Checkbox(value=True, label="random seed")
                     seed_input = gr.Number(value=None, label="seed", precision=0)
                     size_input = gr.Number(value=64, label="size (n^2, 64 really recommended.)", minimum=64, precision=0, step=1) #64
                 with gr.Row():
@@ -99,20 +115,27 @@ def main():
                     previous_tab_button = gr.Button(value="previous", variant="primary")
                     next_tab_button = gr.Button(value="next", variant="primary")
                 # events
-                model_reconstruction_tab.select(fn=lambda: globals().update(current_tab=5)).success(fn=return_input_image_handler, outputs=image_input)
-                generate_button.click(fn=lambda: print(end="")).success(fn=model_reconstruction_handler, inputs=[seed_input, size_input, iters_input, lr_input, batch_size_input, dataset_size_train_input, dataset_size_valid_input, dataset_size_test_input], outputs=[images_viewer_output, images_viewer_slider_input, file_output])
+                model_generation_tab.select(fn=lambda: globals().update(current_tab=5)).success(fn=return_input_image_handler, outputs=image_input)
+                generate_button.click(fn=lambda: print(end="")).success(fn=model_generation_handler, inputs=[random_seed_input, seed_input, size_input, iters_input, lr_input, batch_size_input, dataset_size_train_input, dataset_size_valid_input, dataset_size_test_input], outputs=[images_viewer_output, images_viewer_slider_input, file_output])
                 images_viewer_slider_input.change(fn=images_viewer_slider_handler, inputs=images_viewer_slider_input, outputs=images_viewer_output)
                 previous_tab_button.click(fn=previous_tab_button_handler, outputs=tabs)
                 next_tab_button.click(fn=next_tab_button_handler, outputs=tabs)
             
             with gr.Tab(label="model finetuning", id=6) as model_fine_tuning_tab:
                 # components
+                gr.Markdown(
+                    """
+                    ### after you have finished inputting the desired parameters, click on the "finetune" button to begin generating the novel images from the different viewpoints.
+                    ### the model will be shown on the right image window and the mesh fill be available to download right above the "finetune" button.
+                    """)
                 with gr.Row():
                     image_input = gr.Image(height=512, width=512, interactive=False)
                     images_viewer_output = gr.Image(label="image")
                 images_viewer_slider_input = gr.Slider(minimum=0, maximum=0, label="slide to view generated model from different angles", step=1, interactive=False)
                 with gr.Row():
-                    seed_input = gr.Number(value=8008135, label="seed (8008135 = random)", precision=0)
+                    random_seed_input = gr.Checkbox(value=True, label="random seed")
+                    seed_input = gr.Number(value=None, label="seed", precision=0)
+                with gr.Row():
                     size_input = gr.Number(value=64, label="size (n^2, 64 really recommended.)", minimum=64, precision=0, step=1) #64
                     tet_grid_size_input = gr.Dropdown(label="tet_grid_size", choices=["32", "64", "128", "256"], value="128")
                 with gr.Row():
@@ -124,78 +147,80 @@ def main():
                     dataset_size_valid_input = gr.Number(value=8, label="dataset_size_valid", precision=0, minimum=1, step=1) #8
                     dataset_size_test_input = gr.Number(value=100, label="dataset_size_test", precision=0, minimum=1, step=1) #100
                 file_output = gr.File(visible=False)
-                generate_button = gr.Button(value="generate", variant="primary")
+                finetune_button = gr.Button(value="finetune", variant="primary")
                 with gr.Row():
                     previous_tab_button = gr.Button(value="previous", variant="primary")
                     next_tab_button = gr.Button(value="next", variant="secondary")
                 # events
                 model_fine_tuning_tab.select(fn=lambda: globals().update(current_tab=6)).success(fn=return_input_image_handler, outputs=image_input)
-                generate_button.click(fn=lambda: print(end="")).success(fn=model_finetuning_handler, inputs=[seed_input, size_input, tet_grid_size_input, iters_input, lr_input, batch_size_input, dataset_size_train_input, dataset_size_valid_input, dataset_size_test_input], outputs=[images_viewer_output, images_viewer_slider_input, file_output])
+                finetune_button.click(fn=lambda: print(end="")).success(fn=model_finetuning_handler, inputs=[random_seed_input, seed_input, size_input, tet_grid_size_input, iters_input, lr_input, batch_size_input, dataset_size_train_input, dataset_size_valid_input, dataset_size_test_input], outputs=[images_viewer_output, images_viewer_slider_input, file_output])
                 images_viewer_slider_input.change(fn=images_viewer_slider_handler, inputs=images_viewer_slider_input, outputs=images_viewer_output)
                 previous_tab_button.click(fn=previous_tab_button_handler, outputs=tabs)
                 next_tab_button.click(fn=next_tab_button_handler, outputs=tabs)
             
-            with gr.Tab(label="project manager", id=2) as file_manager_tab:
+            with gr.Tab(label="workspace manager", id=2) as file_manager_tab:
                 # components
                 gr.Markdown(
                     """
-                    ### this tab is used to view, download and delete projects, simply select a project name to start.
+                    ### this tab is used to view, download and delete workspaces, simply select a workspace name to start.
                     """
                 )
                 with gr.Row():
                     images_viewer_output = gr.Image(label="model viewer", interactive=False)
                     with gr.Column():
                         images_viewer_slider_input = gr.Slider(minimum=0, maximum=0, label="slide to change viewpoint of model", step=1)
-                        project_name_input = gr.Dropdown(choices=os.listdir("workspaces"), label="project name")
+                        workspace_name_input = gr.Dropdown(choices=os.listdir("workspaces"), label="workspace name")
                         finetune_button = gr.Button(visible=False)
                         delete_button = gr.Button(visible=False)
                         file_output = gr.File(visible=False)
                 # events
-                file_manager_tab.select(fn=lambda: globals().update(current_tab=2)).success(fn=lambda: gr.Dropdown(choices=os.listdir("workspaces"), label="project name"), outputs=project_name_input)
-                images_viewer_slider_input.change(fn=project_manager_name_handler, inputs=project_name_input).success(fn=images_viewer_slider_handler, inputs=images_viewer_slider_input, outputs=images_viewer_output)
-                project_name_input.input(fn=load_project_handler, inputs=project_name_input, outputs=[images_viewer_output, images_viewer_slider_input, finetune_button, delete_button, file_output])
-                finetune_button.click(fn=finetune_project_handler, inputs=project_name_input, outputs=[tabs])
-                delete_button.click(fn=delete_project_handler, inputs=project_name_input, outputs=[images_viewer_output, images_viewer_slider_input, project_name_input, delete_button, file_output])
+                file_manager_tab.select(fn=lambda: globals().update(current_tab=2)).success(fn=lambda: gr.Dropdown(choices=os.listdir("workspaces"), label="workspace name"), outputs=workspace_name_input)
+                images_viewer_slider_input.change(fn=workspace_manager_name_handler, inputs=workspace_name_input).success(fn=images_viewer_slider_handler, inputs=images_viewer_slider_input, outputs=images_viewer_output)
+                workspace_name_input.input(fn=load_workspace_handler, inputs=workspace_name_input, outputs=[images_viewer_output, images_viewer_slider_input, finetune_button, delete_button, file_output])
+                finetune_button.click(fn=finetune_workspace_handler, inputs=workspace_name_input, outputs=[tabs])
+                delete_button.click(fn=delete_workspace_handler, inputs=workspace_name_input, outputs=[images_viewer_output, images_viewer_slider_input, workspace_name_input, delete_button, file_output])
                 
             with gr.Tab(label="settings", id=1) as settings_tab:
                 # components
+                gr.Markdown(
+                    """
+                    ### click on the "save settings" button to after you have dialed in your settings, otherwise the settings will not be updated (and saved).
+                    """)
                 info_tab_on_launch = gr.Checkbox(value=settings["info_tab_on_launch"], label="load up info tab on launch")
+                zero123_checkpoint_input = gr.Dropdown(choices=["zero123-xl", "105000", "165000"], value=settings["zero123_checkpoint"], label="zero123 model checkpoint")
                 backbone_input = gr.Dropdown(choices=["grid", "vanilla", "grid_tcnn", "grid_taichi"], value=settings["backbone"], label="nerf backbone")
                 optimizer_input = gr.Dropdown(choices=["adan", "adam"], value=settings["optimizer"], label="optimizer")
                 fp16_input = gr.Checkbox(value=settings["fp16"], label="use float16 instead of float32 for training")
                 save_button = gr.Button(value="save settings", variant="primary")
                 # events
                 settings_tab.select(fn=lambda: globals().update(current_tab=1))
-                save_button.click(fn=save_settings_handler, inputs=[info_tab_on_launch, backbone_input, optimizer_input, fp16_input], outputs=save_button)
+                save_button.click(fn=save_settings_handler, inputs=[info_tab_on_launch, backbone_input, optimizer_input, fp16_input, zero123_checkpoint_input], outputs=save_button)
                     
             with gr.Tab(label="info", id=0) as info_tab:
                 # components
                 gr.Markdown(
                     """
                     # image to 3d model generation
-                    a final year project by oh zhi hua (rod) for nanyang technological university computer engineering program.
+                    a final year workspace by oh zhi hua (rod) for nanyang technological university computer engineering program.
                     
                     ## Introduction
-                    This project provides a graphical user interface to generate 3D models from a single image by wrapping the stable-dreamfusion with gradio.
+                    Welcome to stable-dreamfusion-gui, a workspace which provides a graphical user interface to generate 3D models from a single image by wrapping the stable-dreamfusion with gradio.
                     
-                    As the quality of the 3D model depends largely on the quality of the image generated by stable-diffusion, any unsatisfactory image will ruin the end result.
+                    The workspace gives the user the option to generate 6 novel viewpoints from the front, back, left, right, top and bottom of the object in the input image, before sending them into stable-dreamfusion for 3D generation.
                     
-                    Therefore, the project also provide a way to generate novel viewpoints of the object in the input image, which is then fed into stable-dreamfusion for 3D reconstruction.
-                    
-                    To start, simply click the tab labeled "reconstruction" to start exploring.
+                    To start, simply click the tab labeled "new workspace" to start exploring.
                     
                     Have fun!
                     
                     ## Tabs
-                    rod's workflow ==> generate 3D models from a single image using rod's workflow
+                    new workspace  → start generating 3D models
                     
-                    file manager   ==> manage the existing projects, removing (deleting) unwanted projects, cleaning temp files
+                    file manager   → manage the existing workspaces, view/finetune/delete workspaces
                     
-                    settings       ==> settings page to configure the default values when starting the application
+                    settings       → configure the NeRF backend and default tab when starting the application
                     
                     ## Support
-                    If you need support, please submit an issue at "https://github.com/ghotinggoad/stable-dreamfusion-gui/issues"
-                    I will check if the bug is from my wrapper or from stable-dreamfusion!
+                    If you need support, please submit an issue at "https://github.com/ghotinggoad/stable-dreamfusion-gui/issues"!
                     """)
                 # events
                 info_tab.select(fn=lambda: globals().update(current_tab=0))
@@ -204,6 +229,7 @@ def main():
     
     # rmdir temp folder
     delete_directory("temp")
+    delete_directory("workspaces/temp")
     # clear ram (including vram)
     clear_memory()
 
@@ -235,28 +261,29 @@ def load_settings():
     except:
         print("settings failed to load")
 
-def save_settings_handler(info_tab_on_launch, backbone, optimizer, fp16):
+def save_settings_handler(info_tab_on_launch, backbone, optimizer, fp16, zero123_checkpoint):
     try:
         with open("settings.json", "w") as file:
             settings["info_tab_on_launch"] = info_tab_on_launch
             settings["backbone"] = backbone
             settings["optimizer"] = optimizer
             settings["fp16"] = fp16
+            settings["zero123_checkpoint"] = zero123_checkpoint
             
             json.dump(settings, file, indent=4)
             return gr.Button(value="settings saved", variant="primary")
     except:
         print("settings failed to save")
 
-def load_project_handler(project_name_input):
+def load_workspace_handler(workspace_name_input):
     global max_epoch
     
-    os.makedirs("temp/{}".format(project_name_input), exist_ok=True)
-    temp = cv2.imread("workspaces/{}/image.png".format(project_name_input), cv2.IMREAD_UNCHANGED)
-    cv2.imwrite("temp/{}/image.png".format(project_name_input), temp)
+    os.makedirs("temp/{}".format(workspace_name_input), exist_ok=True)
+    temp = cv2.imread("workspaces/{}/images/image_0.png".format(workspace_name_input), cv2.IMREAD_UNCHANGED)
+    cv2.imwrite("temp/{}/image.png".format(workspace_name_input), temp)
     del temp
     
-    with open("workspaces/{}/info.json".format(project_name_input), "r") as f:
+    with open("workspaces/{}/info.json".format(workspace_name_input), "r") as f:
         temp = json.load(f)
     max_epoch = temp["max_epoch"]
     dmtet = temp["dmtet"]
@@ -264,58 +291,55 @@ def load_project_handler(project_name_input):
         
     del temp
     
-    os.makedirs("temp/{}/project_manager".format(project_name_input), exist_ok=True)
-    video = cv2.VideoCapture("workspaces/{}/results/df_ep{:04d}_rgb.mp4".format(project_name_input, max_epoch))
+    os.makedirs("temp/{}/workspace_manager".format(workspace_name_input), exist_ok=True)
+    video = cv2.VideoCapture("workspaces/{}/results/df_ep{:04d}_rgb.mp4".format(workspace_name_input, max_epoch))
     image = video.read()[1]
-    cv2.imwrite("temp/{}/project_manager/df_ep{:04d}_{:04d}_rgb.png".format(project_name_input, max_epoch, 0), image)
-    try:
-        for i in range(1, dataset_size_train):
-            temp = video.read()[1]
-            cv2.imwrite("temp/{}/project_manager/df_ep{:04d}_{:04d}_rgb.png".format(project_name_input, max_epoch, i), temp)
-    except:
-        print("video doesn't have 100 frames")
+    cv2.imwrite("temp/{}/workspace_manager/df_ep{:04d}_{:04d}_rgb.png".format(workspace_name_input, max_epoch, 0), image)
+    for i in range(1, dataset_size_train):
+        temp = video.read()[1]
+        cv2.imwrite("temp/{}/workspace_manager/df_ep{:04d}_{:04d}_rgb.png".format(workspace_name_input, max_epoch, i), temp)
     
     image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGB)
     
-    with zipfile.ZipFile("temp/{}/{}.zip".format(project_name_input, project_name_input), "w") as file:
-        file.write("workspaces/{}/mesh/albedo.png".format(project_name_input), arcname="albedo.png")
-        file.write("workspaces/{}/mesh/mesh.mtl".format(project_name_input), arcname="mesh.mtl")
-        file.write("workspaces/{}/mesh/mesh.obj".format(project_name_input), arcname="mesh.obj")
+    with zipfile.ZipFile("temp/{}/{}.zip".format(workspace_name_input, workspace_name_input), "w") as file:
+        file.write("workspaces/{}/mesh/albedo.png".format(workspace_name_input), arcname="albedo.png")
+        file.write("workspaces/{}/mesh/mesh.mtl".format(workspace_name_input), arcname="mesh.mtl")
+        file.write("workspaces/{}/mesh/mesh.obj".format(workspace_name_input), arcname="mesh.obj")
     
     if dmtet:
         return image, gr.Slider(label="slide to change viewpoint of model", minimum=0, maximum=dataset_size_train-1, value=0, step=1), \
             gr.Button(visible=False), gr.Button(value="delete", visible=True, variant="stop"), \
-            gr.File(value="temp/{}/{}.zip".format(project_name_input, project_name_input), label="download", visible=True)
+            gr.File(value="temp/{}/{}.zip".format(workspace_name_input, workspace_name_input), label="download", visible=True)
     else:
         return image, gr.Slider(label="slide to change viewpoint of model", minimum=0, maximum=dataset_size_train-1, value=0, step=1), \
             gr.Button(value="finetune", visible=True, variant="primary"), gr.Button(value="delete", visible=True, variant="stop"), \
-            gr.File(value="temp/{}/{}.zip".format(project_name_input, project_name_input), label="download", visible=True)
+            gr.File(value="temp/{}/{}.zip".format(workspace_name_input, workspace_name_input), label="download", visible=True)
 
-def finetune_project_handler(project_name_input):
+def finetune_workspace_handler(workspace_name_input):
     global current_tab
-    global project_name
+    global workspace_name
     global single_image
     current_tab = 6
-    project_name = project_name_input
+    workspace_name = workspace_name_input
     
-    with open("workspaces/{}/info.json".format(project_name_input), "r") as f:
+    with open("workspaces/{}/info.json".format(workspace_name_input), "r") as f:
         temp = json.load(f)
     single_image = temp["single_image"]
     
-    os.makedirs("temp/{}/six_view_generation".format(project_name), exist_ok=True)
-    image = cv2.imread("workspaces/{}/image_0_rgba.png".format(project_name_input), cv2.IMREAD_UNCHANGED)
-    cv2.imwrite("temp/{}/six_view_generation/image_0.png".format(project_name_input), image)
+    os.makedirs("temp/{}/six_view_generation".format(workspace_name), exist_ok=True)
+    image = cv2.imread("workspaces/{}/images/image_0.png".format(workspace_name_input), cv2.IMREAD_UNCHANGED)
+    cv2.imwrite("temp/{}/six_view_generation/image_0.png".format(workspace_name_input), image)
     if not single_image:
         for i in range(1, 6):
-            image = cv2.imread("workspaces/{}/image_{:1}_rgba.png".format(project_name_input, i), cv2.IMREAD_UNCHANGED)
-            cv2.imwrite("temp/{}/six_view_generation/image_{:1}.png".format(project_name_input, i), image)
+            image = cv2.imread("workspaces/{}/images/image_{:1}.png".format(workspace_name_input, i), cv2.IMREAD_UNCHANGED)
+            cv2.imwrite("temp/{}/six_view_generation/image_{:1}.png".format(workspace_name_input, i), image)
         
     return gr.Tab(selected=current_tab)
 
-def delete_project_handler(project_name_input):
-    delete_directory("workspaces/{}".format(project_name_input))
+def delete_workspace_handler(workspace_name_input):
+    delete_directory("workspaces/{}".format(workspace_name_input))
     return gr.Image(value=None, interactive=False), gr.Slider(minimum=0, maximum=0, value=None, step=1, label="slide to change viewpoint of model"), \
-           gr.Dropdown(choices=os.listdir("workspaces"), value=None, label="project name"), gr.Button(visible=False), gr.File(visible=False)
+           gr.Dropdown(choices=os.listdir("workspaces"), value=None, label="workspace name"), gr.Button(visible=False), gr.File(visible=False)
                         
 
 # gradio event functions
@@ -333,32 +357,47 @@ def next_tab_button_handler():
     return gr.Tabs(selected=current_tab)
 
 def return_input_image_handler():
-    image = cv2.cvtColor(cv2.imread("temp/{}/image.png".format(project_name), cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2RGBA)
+    image = cv2.cvtColor(cv2.imread("temp/{}/image.png".format(workspace_name), cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2RGBA)
     return image
 
 def images_viewer_slider_handler(slider):
     # updates the image based on the slider value, usually to select the "angle" (index of the image)
     global current_tab
-    global project_name
+    global workspace_name
     global max_epoch
     if current_tab == 2:
-        with open("workspaces/{}/info.json".format(project_name), "r") as f:
+        with open("workspaces/{}/info.json".format(workspace_name), "r") as f:
             temp = json.load(f)
         max_epoch = temp["max_epoch"]
-        image = cv2.imread("temp/{}/project_manager/df_ep{:04d}_{:04d}_rgb.png".format(project_name, max_epoch, slider))
+        image = cv2.imread("temp/{}/workspace_manager/df_ep{:04d}_{:04d}_rgb.png".format(workspace_name, max_epoch, slider))
     elif current_tab == 4:
-        image = cv2.imread("temp/{}/six_view_generation/image_{:1}.png".format(project_name, slider))
+        image = cv2.imread("temp/{}/six_view_generation/image_{:1}.png".format(workspace_name, slider))
     elif current_tab == 5:
-        image = cv2.imread("temp/{}/project_manager/df_ep{:04d}_{:04d}_rgb.png".format(project_name, max_epoch, slider))
+        image = cv2.imread("temp/{}/workspace_manager/df_ep{:04d}_{:04d}_rgb.png".format(workspace_name, max_epoch, slider))
     elif current_tab == 6:
-        image = cv2.imread("temp/{}_dmtet/project_manager/df_ep{:04d}_{:04d}_rgb.png".format(project_name, max_epoch, slider))
+        image = cv2.imread("temp/{}_dmtet/workspace_manager/df_ep{:04d}_{:04d}_rgb.png".format(workspace_name, max_epoch, slider))
     else:
         return None
     return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-def project_manager_name_handler(project_name_input):
-    global project_name
-    project_name = project_name_input
+def single_image_checkbox_handler(single_image_input):
+    global current_tab
+    global workspace_name
+    global single_image
+    
+    current_tab = 4
+    single_image = single_image_input
+    
+    image = cv2.cvtColor(cv2.imread("temp/{}/image.png".format(workspace_name), cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2RGB)
+    os.makedirs("temp/{}/six_view_generation".format(workspace_name), exist_ok=True)
+    
+    image = cv2.resize(image, (512, 512))
+    cv2.imwrite("temp/{}/six_view_generation/image_0.png".format(workspace_name), cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+    return image
+
+def workspace_manager_name_handler(workspace_name_input):
+    global workspace_name
+    workspace_name = workspace_name_input
 
 # zero123/stable-dreamfusion/cv functions
 
@@ -446,11 +485,12 @@ def sample_model(input_im, model, sampler, precision, h, w, ddim_steps, n_sample
             return torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0).cpu()
 
 def generate_novel_views(image, iters, polars, azimuths, size=256):
+    global settings
     # polars, top = -90, straight = 0, bottom = 90
     # azimuth, left = -90, front = 0, right = 90, behind = 180
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # model = zero123_utils.load_model_from_config(OmegaConf.load("pretrained/zero123/sd-objaverse-finetune-c_concat-256.yaml"), "pretrained/zero123/zero123-xl.ckpt", device)
-    model = zero123_utils.load_model_from_config(OmegaConf.load("pretrained/zero123/sd-objaverse-finetune-c_concat-256.yaml"), "pretrained/zero123/105000.ckpt", device)
+    model = zero123_utils.load_model_from_config(OmegaConf.load("pretrained/zero123/sd-objaverse-finetune-c_concat-256.yaml"), "pretrained/zero123/{}.ckpt".format(settings["zero123_checkpoint"]), device)
     model.use_ema = False
     
     image = transforms.ToTensor()(image).unsqueeze(0).to(device)
@@ -480,7 +520,6 @@ def generate_novel_views(image, iters, polars, azimuths, size=256):
     del device
     del sampler
     del x_samples_ddim
-    
     clear_memory()
     
     return images
@@ -574,51 +613,57 @@ def generate_model(opt):
     # saves mesh
     trainer.save_mesh()
 
-def preprocess_image_button_handler(project_name_input, image_input):
+def remove_background_button_handler(workspace_name_input, image_input):
     global current_tab
-    global project_name
+    global workspace_name
     
     current_tab = 3
     
-    project_name = project_name_input
-    image = preprocess(image_input, size=512)[0]
-    os.makedirs("temp/{}".format(project_name), exist_ok=True)
-    cv2.imwrite("temp/{}/image.png".format(project_name), cv2.cvtColor(image, cv2.COLOR_RGBA2BGRA))
-    cv2.imwrite("workspaces/{}/image.png".format(project_name), cv2.cvtColor(image, cv2.COLOR_RGBA2BGRA))
+    workspace_name = workspace_name_input
+    if image_input.shape[-1] == 4:
+        image_input = cv2.cvtColor(image_input, cv2.COLOR_RGBA2RGB)
+    
+    height, width, channels = image_input.shape
+    size = max(height, width)
+    image = np.zeros((size, size, channels), dtype=np.uint8)
+    x_offset = (size-width)//2
+    y_offset = (size-height)//2
+    image[y_offset:y_offset + height, x_offset:x_offset + width] = image_input
+    
+    image = preprocess_image.BackgroundRemoval()(image)
+    image = cv2.resize(image, (512, 512))
+    
+    # image = preprocess(image_input, size=512)[0]
+    os.makedirs("temp/{}".format(workspace_name), exist_ok=True)
+    cv2.imwrite("temp/{}/image.png".format(workspace_name), cv2.cvtColor(image, cv2.COLOR_RGBA2BGRA))
+    cv2.imwrite("workspaces/{}/image.png".format(workspace_name), cv2.cvtColor(image, cv2.COLOR_RGBA2BGRA))
     return image
 
-def six_view_generation_handler(single_image_input):
+def six_view_generation_handler():
     global current_tab
-    global project_name
-    global single_image
+    global workspace_name
     
     current_tab = 4
-    single_image = single_image_input
     
-    image = cv2.cvtColor(cv2.imread("temp/{}/image.png".format(project_name), cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2RGB)
-    os.makedirs("temp/{}/six_view_generation".format(project_name), exist_ok=True)
+    image = cv2.cvtColor(cv2.imread("temp/{}/image.png".format(workspace_name), cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2RGB)
+    os.makedirs("temp/{}/six_view_generation".format(workspace_name), exist_ok=True)
     
-    if single_image: 
-        image = cv2.resize(image, (512, 512))
-        cv2.imwrite("temp/{}/six_view_generation/image_0.png".format(project_name), cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
-        return image, gr.Slider(minimum=0, maximum=5, label="slide to view images generated from different angles", step=1, interactive=False)
-        
     polars = [0.0, 0.0, 0.0, -90.0, 90.0]
     azimuths = [90.0, 180.0, -90.0, 0.0, 0.0]
     images = generate_novel_views(image, 200, polars, azimuths)
     
     image = cv2.resize(image, (512, 512))
-    cv2.imwrite("temp/{}/six_view_generation/image_0.png".format(project_name), cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+    cv2.imwrite("temp/{}/six_view_generation/image_0.png".format(workspace_name), cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
     for i in range(5):
         images[i] = cv2.resize(images[i], (512, 512))
-        cv2.imwrite("temp/{}/six_view_generation/image_{:1}.png".format(project_name, i+1), cv2.cvtColor(images[i], cv2.COLOR_RGB2BGR))
+        cv2.imwrite("temp/{}/six_view_generation/image_{:1}.png".format(workspace_name, i+1), cv2.cvtColor(images[i], cv2.COLOR_RGB2BGR))
     
     return image, gr.Slider(minimum=0, maximum=5, label="slide to view images generated from different angles", step=1, interactive=True)
 
-def model_reconstruction_handler(seed, size, iters, lr, batch_size, dataset_size_train, dataset_size_valid, dataset_size_test):
+def model_generation_handler(random_seed, seed, size, iters, lr, batch_size, dataset_size_train, dataset_size_valid, dataset_size_test):
     global settings
     global current_tab
-    global project_name
+    global workspace_name
     global single_image
     
     current_tab = 5
@@ -632,8 +677,11 @@ def model_reconstruction_handler(seed, size, iters, lr, batch_size, dataset_size
     opt["backbone"] = settings["backbone"]
     opt["optim"] = settings["optimizer"]
     opt["fp16"] = settings["fp16"]
-    opt["workspace"] = "workspaces/{}".format(project_name)
-    opt["seed"] = seed
+    opt["workspace"] = "workspaces/{}".format(workspace_name)
+    if random_seed:
+        opt["seed"] = None
+    else:
+        opt["seed"] = seed
     opt["h"] = size
     opt["w"] = size
     opt["iters"] = iters
@@ -645,13 +693,13 @@ def model_reconstruction_handler(seed, size, iters, lr, batch_size, dataset_size
     opt["exp_start_iter"] = opt["exp_start_iter"] or 0
     opt["exp_end_iter"] = opt["exp_end_iter"] or opt["iters"]
     if single_image:
-        opt["images"] = ["temp/{}/model_reconstruction/image_0_rgba.png".format(project_name)]
+        opt["images"] = ["temp/{}/model_generation/image_0_rgba.png".format(workspace_name)]
         opt["ref_polars"] = [90.0]
         opt["ref_azimuths"] = [0.0]
         opt["ref_radii"] = [3.2]
         opt["zero123_ws"] = [1]
     else: 
-        opt["images"] = ["temp/{}/model_reconstruction/image_0_rgba.png".format(project_name), "temp/{}/model_reconstruction/image_1_rgba.png".format(project_name), "temp/{}/model_reconstruction/image_2_rgba.png".format(project_name), "temp/{}/model_reconstruction/image_3_rgba.png".format(project_name), "temp/{}/model_reconstruction/image_4_rgba.png".format(project_name), "temp/{}/model_reconstruction/image_5_rgba.png".format(project_name)]
+        opt["images"] = ["temp/{}/model_generation/image_0_rgba.png".format(workspace_name), "temp/{}/model_generation/image_1_rgba.png".format(workspace_name), "temp/{}/model_generation/image_2_rgba.png".format(workspace_name), "temp/{}/model_generation/image_3_rgba.png".format(workspace_name), "temp/{}/model_generation/image_4_rgba.png".format(workspace_name), "temp/{}/model_generation/image_5_rgba.png".format(workspace_name)]
         opt["ref_polars"] = [90.0, 90.0, 90.0, 90.0, 180.0, 0.0001]
         opt["ref_azimuths"] = [0.0, 90.0, 180.0, -90.0, 0.0, 0.0]
         opt["ref_radii"] = [3.2, 3.2, 3.2, 3.2, 3.2, 3.2]
@@ -660,46 +708,54 @@ def model_reconstruction_handler(seed, size, iters, lr, batch_size, dataset_size
     opt = argparse.Namespace(**opt)
     
     # preprocess and save images to temporary folder in order to make calls to stable-dreamfusion trainer without making changes to its code
-    os.makedirs("temp/{}/model_reconstruction".format(project_name), exist_ok=True)
+    os.makedirs("temp/{}/model_generation".format(workspace_name), exist_ok=True)
     
-    image = cv2.cvtColor(cv2.imread("temp/{}/six_view_generation/image_0.png".format(project_name)), cv2.COLOR_BGRA2RGBA)
+    image = cv2.cvtColor(cv2.imread("temp/{}/six_view_generation/image_0.png".format(workspace_name), cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2RGBA)
     image_rgba, image_depth, image_normal = preprocess(image, size=1024)
-    cv2.imwrite("temp/{}/model_reconstruction/image_0_rgba.png".format(project_name), cv2.cvtColor(image_rgba, cv2.COLOR_RGBA2BGRA))
-    cv2.imwrite("temp/{}/model_reconstruction/image_0_depth.png".format(project_name), image_depth)
-    cv2.imwrite("temp/{}/model_reconstruction/image_0_normal.png".format(project_name), image_normal)
+    cv2.imwrite("temp/{}/model_generation/image_0_rgba.png".format(workspace_name), cv2.cvtColor(image_rgba, cv2.COLOR_RGBA2BGRA))
+    cv2.imwrite("temp/{}/model_generation/image_0_depth.png".format(workspace_name), image_depth)
+    cv2.imwrite("temp/{}/model_generation/image_0_normal.png".format(workspace_name), image_normal)
     del image_rgba, image_depth, image_normal
     if not single_image:    
         for i in range(1, 6):
-            image = cv2.cvtColor(cv2.imread("temp/{}/six_view_generation/image_{:1}.png".format(project_name, i)), cv2.COLOR_BGRA2RGBA)
+            image = cv2.cvtColor(cv2.imread("temp/{}/six_view_generation/image_{:1}.png".format(workspace_name, i), cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2RGBA)
             image_rgba, image_depth, image_normal = preprocess(image, size=1024)
-            cv2.imwrite("temp/{}/model_reconstruction/image_{:1}_rgba.png".format(project_name, i), cv2.cvtColor(image_rgba, cv2.COLOR_RGBA2BGRA))
-            cv2.imwrite("temp/{}/model_reconstruction/image_{:1}_depth.png".format(project_name, i), image_depth)
-            cv2.imwrite("temp/{}/model_reconstruction/image_{:1}_normal.png".format(project_name, i), image_normal)
+            cv2.imwrite("temp/{}/model_generation/image_{:1}_rgba.png".format(workspace_name, i), cv2.cvtColor(image_rgba, cv2.COLOR_RGBA2BGRA))
+            cv2.imwrite("temp/{}/model_generation/image_{:1}_depth.png".format(workspace_name, i), image_depth)
+            cv2.imwrite("temp/{}/model_generation/image_{:1}_normal.png".format(workspace_name, i), image_normal)
             del image_rgba, image_depth, image_normal
         
     clear_memory()
         
-    generate_model(opt)
+    try:
+        generate_model(opt)
+    except:
+        delete_directory("workspaces/{}".format(workspace_name))
     
-    image = cv2.imread("temp/{}/image.png".format(project_name))
-    cv2.imwrite("workspaces/{}/image.png".format(project_name), image)
+    os.makedirs("workspaces/{}/images".format(workspace_name), exist_ok=True)
+    image = cv2.cvtColor(cv2.imread("temp/{}/six_view_generation/image_0.png".format(workspace_name), cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2RGBA)
+    cv2.imwrite("workspaces/{}/images/image_0.png".format(workspace_name), cv2.cvtColor(image, cv2.COLOR_RGBA2BGRA))
+    if not single_image:    
+        for i in range(1, 6):
+            image = cv2.cvtColor(cv2.imread("temp/{}/six_view_generation/image_{:1}.png".format(workspace_name, i), cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2RGBA)
+            cv2.imwrite("workspaces/{}/images/image_{:1}.png".format(workspace_name, i), cv2.cvtColor(image, cv2.COLOR_RGBA2BGRA))
     
-    os.makedirs("temp/{}/project_manager".format(project_name), exist_ok=True)
-    video = cv2.VideoCapture("workspaces/{}/results/df_ep{:04d}_rgb.mp4".format(project_name, max_epoch))
+    os.makedirs("temp/{}/workspace_manager".format(workspace_name), exist_ok=True)
+    video = cv2.VideoCapture("workspaces/{}/results/df_ep{:04d}_rgb.mp4".format(workspace_name, max_epoch))
     image = video.read()[1]
-    cv2.imwrite("temp/{}/project_manager/df_ep{:04d}_{:04d}_rgb.png".format(project_name, max_epoch, 0), image)
+    cv2.imwrite("temp/{}/workspace_manager/df_ep{:04d}_{:04d}_rgb.png".format(workspace_name, max_epoch, 0), image)
     for i in range(1, dataset_size_test):
         temp = video.read()[1]
-        cv2.imwrite("temp/{}/project_manager/df_ep{:04d}_{:04d}_rgb.png".format(project_name, max_epoch, i), temp)
+        cv2.imwrite("temp/{}/workspace_manager/df_ep{:04d}_{:04d}_rgb.png".format(workspace_name, max_epoch, i), temp)
         
-    with zipfile.ZipFile("temp/{}/{}.zip".format(project_name, project_name), "w") as file:
-        file.write("workspaces/{}/mesh/albedo.png".format(project_name), arcname="albedo.png")
-        file.write("workspaces/{}/mesh/mesh.mtl".format(project_name), arcname="mesh.mtl")
-        file.write("workspaces/{}/mesh/mesh.obj".format(project_name), arcname="mesh.obj")
+    with zipfile.ZipFile("temp/{}/{}.zip".format(workspace_name, workspace_name), "w") as file:
+        file.write("workspaces/{}/mesh/albedo.png".format(workspace_name), arcname="albedo.png")
+        file.write("workspaces/{}/mesh/mesh.mtl".format(workspace_name), arcname="mesh.mtl")
+        file.write("workspaces/{}/mesh/mesh.obj".format(workspace_name), arcname="mesh.obj")
         
     data = {}
-    with open("workspaces/{}/info.json".format(project_name), "w") as file:
-        data["project_name"] = project_name
+    with open("workspaces/{}/info.json".format(workspace_name), "w") as file:
+        data["workspace_name"] = workspace_name
         data["dmtet"] = False
         data["single_image"] = single_image
         data["seed"] = int(seed)
@@ -718,12 +774,12 @@ def model_reconstruction_handler(seed, size, iters, lr, batch_size, dataset_size
     
     clear_memory()
     
-    return cv2.cvtColor(image, cv2.COLOR_BGR2RGB), gr.Slider(minimum=0, maximum=dataset_size_train-1, label="slide to view generated model from different angles", step=1, interactive=True), gr.File(value="temp/{}/{}.zip".format(project_name, project_name), visible=True)
+    return cv2.cvtColor(image, cv2.COLOR_BGR2RGB), gr.Slider(minimum=0, maximum=dataset_size_train-1, label="slide to view generated model from different angles", step=1, interactive=True), gr.File(value="temp/{}/{}.zip".format(workspace_name, workspace_name), visible=True)
 
-def model_finetuning_handler(seed, size, tet_grid_size, iters, lr, batch_size, dataset_size_train, dataset_size_valid, dataset_size_test):
+def model_finetuning_handler(random_seed, seed, size, tet_grid_size, iters, lr, batch_size, dataset_size_train, dataset_size_valid, dataset_size_test):
     global settings
     global current_tab
-    global project_name
+    global workspace_name
     
     current_tab = 6
     
@@ -736,8 +792,11 @@ def model_finetuning_handler(seed, size, tet_grid_size, iters, lr, batch_size, d
     opt["backbone"] = settings["backbone"]
     opt["optim"] = settings["optimizer"]
     opt["fp16"] = settings["fp16"]
-    opt["workspace"] = "workspaces/{}_dmtet".format(project_name)
-    opt["seed"] = seed
+    opt["workspace"] = "workspaces/{}_dmtet".format(workspace_name)
+    if random_seed:
+        opt["seed"] = None
+    else:
+        opt["seed"] = seed
     opt["h"] = size
     opt["w"] = size
     opt["iters"] = iters
@@ -749,7 +808,7 @@ def model_finetuning_handler(seed, size, tet_grid_size, iters, lr, batch_size, d
     opt["exp_start_iter"] = opt["exp_start_iter"] or 0
     opt["exp_end_iter"] = opt["exp_end_iter"] or opt["iters"]
     opt["dmtet"] = True
-    opt["init_with"] = "workspaces/{}/checkpoints/df.pth".format(project_name)
+    opt["init_with"] = "workspaces/{}/checkpoints/df.pth".format(workspace_name)
     opt["tet_grid_size"] = int(tet_grid_size)
     opt.pop("full_radius_range")
     opt.pop("full_theta_range")
@@ -757,13 +816,13 @@ def model_finetuning_handler(seed, size, tet_grid_size, iters, lr, batch_size, d
     opt.pop("full_fovy_range")
     
     if single_image:
-        opt["images"] = ["temp/{}/model_reconstruction/image_0_rgba.png".format(project_name)]
+        opt["images"] = ["temp/{}_dmtet/model_generation/image_0_rgba.png".format(workspace_name)]
         opt["ref_polars"] = [90.0]
         opt["ref_azimuths"] = [0.0]
         opt["ref_radii"] = [3.2]
         opt["zero123_ws"] = [1]
     else: 
-        opt["images"] = ["temp/{}/model_reconstruction/image_0_rgba.png".format(project_name), "temp/{}/model_reconstruction/image_1_rgba.png".format(project_name), "temp/{}/model_reconstruction/image_2_rgba.png".format(project_name), "temp/{}/model_reconstruction/image_3_rgba.png".format(project_name), "temp/{}/model_reconstruction/image_4_rgba.png".format(project_name), "temp/{}/model_reconstruction/image_5_rgba.png".format(project_name)]
+        opt["images"] = ["temp/{}_dmtet/model_generation/image_0_rgba.png".format(workspace_name), "temp/{}_dmtet/model_generation/image_1_rgba.png".format(workspace_name), "temp/{}_dmtet/model_generation/image_2_rgba.png".format(workspace_name), "temp/{}_dmtet/model_generation/image_3_rgba.png".format(workspace_name), "temp/{}_dmtet/model_generation/image_4_rgba.png".format(workspace_name), "temp/{}_dmtet/model_generation/image_5_rgba.png".format(workspace_name)]
         opt["ref_polars"] = [90.0, 90.0, 90.0, 90.0, 180.0, 0.0001]
         opt["ref_azimuths"] = [0.0, 90.0, 180.0, -90.0, 0.0, 0.0]
         opt["ref_radii"] = [3.2, 3.2, 3.2, 3.2, 3.2, 3.2]
@@ -772,45 +831,53 @@ def model_finetuning_handler(seed, size, tet_grid_size, iters, lr, batch_size, d
     opt = argparse.Namespace(**opt)
     
     # preprocess and save images to temporary folder in order to make calls to stable-dreamfusion trainer without making changes to its code
-    os.makedirs("temp/{}/model_reconstruction".format(project_name), exist_ok=True)
-    image = cv2.cvtColor(cv2.imread("temp/{}/six_view_generation/image_0.png".format(project_name)), cv2.COLOR_BGRA2RGBA)
+    os.makedirs("temp/{}_dmtet/model_generation".format(workspace_name), exist_ok=True)
+    image = cv2.cvtColor(cv2.imread("temp/{}/six_view_generation/image_0.png".format(workspace_name), cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2RGBA)
     image_rgba, image_depth, image_normal = preprocess(image, size=1024)
-    cv2.imwrite("temp/{}/model_reconstruction/image_0_rgba.png".format(project_name), cv2.cvtColor(image_rgba, cv2.COLOR_RGBA2BGRA))
-    cv2.imwrite("temp/{}/model_reconstruction/image_0_depth.png".format(project_name), image_depth)
-    cv2.imwrite("temp/{}/model_reconstruction/image_0_normal.png".format(project_name), image_normal)
+    cv2.imwrite("temp/{}_dmtet/model_generation/image_0_rgba.png".format(workspace_name), cv2.cvtColor(image_rgba, cv2.COLOR_RGBA2BGRA))
+    cv2.imwrite("temp/{}_dmtet/model_generation/image_0_depth.png".format(workspace_name), image_depth)
+    cv2.imwrite("temp/{}_dmtet/model_generation/image_0_normal.png".format(workspace_name), image_normal)
     del image_rgba, image_depth, image_normal
     if not single_image:
         for i in range(1, 6):
-            image = cv2.cvtColor(cv2.imread("temp/{}/six_view_generation/image_{:1}.png".format(project_name, i)), cv2.COLOR_BGRA2RGBA)
+            image = cv2.cvtColor(cv2.imread("temp/{}/six_view_generation/image_{:1}.png".format(workspace_name, i), cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2RGBA)
             image_rgba, image_depth, image_normal = preprocess(image, size=1024)
-            cv2.imwrite("temp/{}/model_reconstruction/image_{:1}_rgba.png".format(project_name, i), cv2.cvtColor(image_rgba, cv2.COLOR_RGBA2BGRA))
-            cv2.imwrite("temp/{}/model_reconstruction/image_{:1}_depth.png".format(project_name, i), image_depth)
-            cv2.imwrite("temp/{}/model_reconstruction/image_{:1}_normal.png".format(project_name, i), image_normal)
+            cv2.imwrite("temp/{}_dmtet/model_generation/image_{:1}_rgba.png".format(workspace_name, i), cv2.cvtColor(image_rgba, cv2.COLOR_RGBA2BGRA))
+            cv2.imwrite("temp/{}_dmtet/model_generation/image_{:1}_depth.png".format(workspace_name, i), image_depth)
+            cv2.imwrite("temp/{}_dmtet/model_generation/image_{:1}_normal.png".format(workspace_name, i), image_normal)
             del image_rgba, image_depth, image_normal
     
     clear_memory()
     
-    generate_model(opt)
+    try:
+        generate_model(opt)
+    except:
+        delete_directory("workspaces/{}_dmtet".format(workspace_name))
     
-    image = cv2.imread("workspaces/{}/image.png".format(project_name), cv2.IMREAD_UNCHANGED)
-    cv2.imwrite("workspaces/{}_dmtet/image.png".format(project_name), image)
+    os.makedirs("workspaces/{}_dmtet/images".format(workspace_name), exist_ok=True)
+    image = cv2.cvtColor(cv2.imread("temp/{}/six_view_generation/image_0.png".format(workspace_name), cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2RGBA)
+    cv2.imwrite("workspaces/{}_dmtet/images/image_0.png".format(workspace_name), cv2.cvtColor(image, cv2.COLOR_RGBA2BGRA))
+    if not single_image:    
+        for i in range(1, 6):
+            image = cv2.cvtColor(cv2.imread("temp/{}/six_view_generation/image_{:1}.png".format(workspace_name, i), cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2RGBA)
+            cv2.imwrite("workspaces/{}_dmtet/images/image_{:1}.png".format(workspace_name, i), cv2.cvtColor(image, cv2.COLOR_RGBA2BGRA))
     
-    os.makedirs("temp/{}_dmtet/project_manager".format(project_name), exist_ok=True)
-    video = cv2.VideoCapture("workspaces/{}_dmtet/results/df_ep{:04d}_rgb.mp4".format(project_name, max_epoch))
+    os.makedirs("temp/{}_dmtet/workspace_manager".format(workspace_name), exist_ok=True)
+    video = cv2.VideoCapture("workspaces/{}_dmtet/results/df_ep{:04d}_rgb.mp4".format(workspace_name, max_epoch))
     image = video.read()[1]
-    cv2.imwrite("temp/{}_dmtet/project_manager/df_ep{:04d}_{:04d}_rgb.png".format(project_name, max_epoch, 0), image)
+    cv2.imwrite("temp/{}_dmtet/workspace_manager/df_ep{:04d}_{:04d}_rgb.png".format(workspace_name, max_epoch, 0), image)
     for i in range(1, dataset_size_test):
         temp = video.read()[1]
-        cv2.imwrite("temp/{}_dmtet/project_manager/df_ep{:04d}_{:04d}_rgb.png".format(project_name, max_epoch, i), temp)
+        cv2.imwrite("temp/{}_dmtet/workspace_manager/df_ep{:04d}_{:04d}_rgb.png".format(workspace_name, max_epoch, i), temp)
         
-    with zipfile.ZipFile("temp/{}_dmtet/{}_dmtet.zip".format(project_name, project_name), "w") as file:
-        file.write("workspaces/{}_dmtet/mesh/albedo.png".format(project_name), arcname="albedo.png")
-        file.write("workspaces/{}_dmtet/mesh/mesh.mtl".format(project_name), arcname="mesh.mtl")
-        file.write("workspaces/{}_dmtet/mesh/mesh.obj".format(project_name), arcname="mesh.obj")
+    with zipfile.ZipFile("temp/{}_dmtet/{}_dmtet.zip".format(workspace_name, workspace_name), "w") as file:
+        file.write("workspaces/{}_dmtet/mesh/albedo.png".format(workspace_name), arcname="albedo.png")
+        file.write("workspaces/{}_dmtet/mesh/mesh.mtl".format(workspace_name), arcname="mesh.mtl")
+        file.write("workspaces/{}_dmtet/mesh/mesh.obj".format(workspace_name), arcname="mesh.obj")
         
     data = {}
-    with open("workspaces/{}_dmtet/info.json".format(project_name), "w") as file:
-        data["project_name"] = "{}_dmtet".format(project_name)
+    with open("workspaces/{}_dmtet/info.json".format(workspace_name), "w") as file:
+        data["workspace_name"] = "{}_dmtet".format(workspace_name)
         data["dmtet"] = True
         data["single_image"] = single_image
         data["seed"] = int(seed)
@@ -829,7 +896,7 @@ def model_finetuning_handler(seed, size, tet_grid_size, iters, lr, batch_size, d
 
     clear_memory()
     
-    return cv2.cvtColor(image, cv2.COLOR_BGR2RGB), gr.Slider(minimum=0, maximum=dataset_size_train-1, label="slide to view generated model from different angles", step=1, interactive=True), gr.File(value="temp/{}_dmtet/{}_dmtet.zip".format(project_name, project_name), visible=True)
+    return cv2.cvtColor(image, cv2.COLOR_BGR2RGB), gr.Slider(minimum=0, maximum=dataset_size_train-1, label="slide to view generated model from different angles", step=1, interactive=True), gr.File(value="temp/{}_dmtet/{}_dmtet.zip".format(workspace_name, workspace_name), visible=True)
 
 if __name__ == "__main__":
     main()

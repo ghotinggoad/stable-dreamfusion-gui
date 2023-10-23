@@ -42,5 +42,8 @@ data/church_ruins_*
 temp
 workspaces/*
 data/amore_dog*
+data/dinosaur*
+data/Ergou*
 data/green_bowl*
+data/toyota_camry*
 clear_memory.py

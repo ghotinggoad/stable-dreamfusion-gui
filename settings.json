@@ -2,5 +2,6 @@
     "info_tab_on_launch": false,
     "backbone": "grid",
     "optimizer": "adan",
-    "fp16": true
+    "fp16": true,
+    "zero123_checkpoint": "zero123-xl"
 }

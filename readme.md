@@ -28,8 +28,8 @@ To avoid python package conflicts, we recommend using a virtual environment, e.g
 
 ```bash
 cd stable-dreamfusion-gui
-python -m venv venv_stable-dreamfusion-gui
-source venv_stable-dreamfusion-gui\bin\activate # you need to repeat this step for every new terminal
+python -m venv venv
+venv\Scripts\activate # you need to repeat this step for every new terminal, this is the same as source 
 ```
 
 ### Install with pip
