@@ -27,6 +27,7 @@ def main():
     global workspace_name
     global single_image
     global max_epoch
+    global zero123_weights
 
     with gr.Blocks(title="stable-diffusion-gui") as app:
         # make temp directory
@@ -41,6 +42,7 @@ def main():
         workspace_name = "temp"
         single_image = False
         max_epoch = 0
+        zero123_weights = [64, 8, 2, 8, 1, 1]
 
         with gr.Tabs(selected=current_tab) as tabs:
             with gr.Tab(label="new workspace", id=3) as new_workspace_tab:
@@ -73,7 +75,9 @@ def main():
                     image_input = gr.Image(height=512, width=512, interactive=False)
                     images_viewer_output = gr.Image(label="image")
                 images_viewer_slider_input = gr.Slider(minimum=0, maximum=5, label="slide to view images generated from different angles", step=1, interactive=False)
-                single_image_input = gr.Checkbox(value=False, label="single image only")
+                with gr.Row():
+                    single_image_input = gr.Checkbox(value=False, label="single image only")
+                    boosted_weights_input = gr.Checkbox(value=False, label="boosted weights (model will more closely follow the generated images of the sides and back)")
                 generate_button = gr.Button(value="generate", variant="primary")
                 with gr.Row():
                     previous_tab_button = gr.Button(value="previous", variant="primary")
@@ -81,6 +85,7 @@ def main():
                 # events
                 six_view_generation_tab.select(fn=lambda: globals().update(current_tab=4)).success(fn=return_input_image_handler, outputs=image_input)
                 single_image_input.select(fn=single_image_checkbox_handler, inputs=single_image_input, outputs=images_viewer_output)
+                boosted_weights_input.select(fn=boosted_weights_checkbox_handler, inputs=boosted_weights_input)
                 generate_button.click(fn=lambda: print(end="")).success(fn=six_view_generation_handler, outputs=[images_viewer_output, images_viewer_slider_input])
                 images_viewer_slider_input.change(fn=images_viewer_slider_handler, inputs=images_viewer_slider_input, outputs=images_viewer_output)
                 previous_tab_button.click(fn=previous_tab_button_handler, outputs=tabs)
@@ -225,7 +230,9 @@ def main():
                 # events
                 info_tab.select(fn=lambda: globals().update(current_tab=0))
     
-    app.queue(max_size=1).launch(quiet=True)
+    _, local_url, public_url = app.queue(max_size=1).launch(share=True)
+    print(local_url)
+    print(public_url)
     
     # rmdir temp folder
     delete_directory("temp")
@@ -394,6 +401,16 @@ def single_image_checkbox_handler(single_image_input):
     image = cv2.resize(image, (512, 512))
     cv2.imwrite("temp/{}/six_view_generation/image_0.png".format(workspace_name), cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
     return image
+
+def boosted_weights_checkbox_handler(boosted_weights_input):
+    global current_tab
+    global zero123_weights
+    
+    current_tab = 4
+    if boosted_weights_input:
+        zero123_weights = [8, 4, 2, 4, 1, 1]
+    else:
+        zero123_weights = [64, 8, 2, 8, 1, 1]
 
 def workspace_manager_name_handler(workspace_name_input):
     global workspace_name
@@ -665,6 +682,7 @@ def model_generation_handler(random_seed, seed, size, iters, lr, batch_size, dat
     global current_tab
     global workspace_name
     global single_image
+    global zero123_weights
     
     current_tab = 5
     
@@ -703,7 +721,7 @@ def model_generation_handler(random_seed, seed, size, iters, lr, batch_size, dat
         opt["ref_polars"] = [90.0, 90.0, 90.0, 90.0, 180.0, 0.0001]
         opt["ref_azimuths"] = [0.0, 90.0, 180.0, -90.0, 0.0, 0.0]
         opt["ref_radii"] = [3.2, 3.2, 3.2, 3.2, 3.2, 3.2]
-        opt["zero123_ws"] = [64, 8, 2, 8, 1, 1]
+        opt["zero123_ws"] = zero123_weights
 
     opt = argparse.Namespace(**opt)
     
@@ -780,6 +798,7 @@ def model_finetuning_handler(random_seed, seed, size, tet_grid_size, iters, lr, 
     global settings
     global current_tab
     global workspace_name
+    global zero123_weights
     
     current_tab = 6
     
@@ -826,7 +845,7 @@ def model_finetuning_handler(random_seed, seed, size, tet_grid_size, iters, lr, 
         opt["ref_polars"] = [90.0, 90.0, 90.0, 90.0, 180.0, 0.0001]
         opt["ref_azimuths"] = [0.0, 90.0, 180.0, -90.0, 0.0, 0.0]
         opt["ref_radii"] = [3.2, 3.2, 3.2, 3.2, 3.2, 3.2]
-        opt["zero123_ws"] = [64, 8, 2, 8, 1, 1]
+        opt["zero123_ws"] = zero123_weights
     
     opt = argparse.Namespace(**opt)
     
