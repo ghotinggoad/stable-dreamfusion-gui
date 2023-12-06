@@ -1,3 +1,9 @@
+---
+title: stable-dreamfusion-gui
+app_file: gradio_app.py
+sdk: gradio
+sdk_version: 3.47.1
+---
 # stable-dreamfusion-gui
 
 A gradio interface to use [stable-dreamfusion](https://github.com/ashawkey/stable-dreamfusion).

@@ -3,5 +3,5 @@
     "backbone": "grid",
     "optimizer": "adan",
     "fp16": true,
-    "zero123_checkpoint": "zero123-xl"
+    "zero123_checkpoint": "105000"
 }
